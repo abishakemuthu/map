@@ -1,59 +1,65 @@
 import streamlit as st
-import pandas as pd
 import folium
-from folium.plugins import MarkerCluster
+import pandas as pd
 from streamlit_folium import folium_static
+from folium.plugins import Fullscreen, MarkerCluster
 import ast
 
-# Load the dataset
+# Load data (Replace 'your_data.csv' with actual file path or use a database)
 df = pd.read_excel("combined_fuel_stops.xlsx")
 
-# Ensure the amenities column is properly parsed
-df["amenities"] = df["amenities"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
-df["amenities"] = df["amenities"].apply(lambda x: x if isinstance(x, dict) else {})
+def extract_amenities(amenities):
+    """Convert amenities JSON-like strings into Python dictionaries."""
+    try:
+        return ast.literal_eval(amenities) if isinstance(amenities, str) else {}
+    except:
+        return {}
 
-# Fill NaN values in fuel_diesel_price
-df["fuel_diesel_price"] = df["fuel_diesel_price"].fillna("N/A")
+df['amenities'] = df['amenities'].apply(extract_amenities)
 
-# Extract unique amenities
-all_amenities = set()
-for entry in df["amenities"]:
-    all_amenities.update(entry.keys())
+# Get unique amenities
+def get_unique_amenities(data):
+    unique_amenities = set()
+    for amenities in data:
+        unique_amenities.update(amenities.keys())
+    return sorted(unique_amenities)
 
-# Sidebar for filtering amenities
-st.sidebar.header("Filter Amenities")
-selected_amenities = st.sidebar.multiselect("Select Amenities", sorted(all_amenities))
+all_amenities = get_unique_amenities(df['amenities'])
+
+# Streamlit UI
+st.set_page_config(layout="wide")
+st.title("Fuel Station Locator with Amenities")
+
+# Sidebar filter panel
+selected_amenities = st.sidebar.multiselect("Select Amenities", all_amenities)
 
 # Filter locations based on selected amenities
-if selected_amenities:
-    filtered_df = df[df["amenities"].apply(lambda a: all(am in a for am in selected_amenities))]
-else:
-    filtered_df = df  # Show all if no filter is selected
+def filter_locations(data, selected):
+    if not selected:
+        return data
+    return data[data['amenities'].apply(lambda x: all(amenity in x for amenity in selected))]
 
-# Create a map centered at an average location
-m = folium.Map(location=[df["latitude"].mean(), df["longitude"].mean()], zoom_start=5)
+df_filtered = filter_locations(df, selected_amenities)
 
-# Add marker cluster
+# Create map
+m = folium.Map(location=[df['latitude'].mean(), df['longitude'].mean()], zoom_start=6, control_scale=True)
+Fullscreen().add_to(m)
 marker_cluster = MarkerCluster().add_to(m)
 
-# Add markers to the map
-for _, row in filtered_df.iterrows():
-    stop_name = row.get("stop_name", "Unknown")
-    diesel_price = row.get("fuel_diesel_price", "N/A")  # Get diesel price, default "N/A"
-    amenities_list = ", ".join(row["amenities"].keys()) if row["amenities"] else "No amenities listed"
-
+# Add markers
+for _, row in df_filtered.iterrows():
     popup_content = f"""
-        <b>{stop_name}</b><br>
-        <b>Diesel Price:</b> {diesel_price}<br>
-        <b>Amenities:</b> {amenities_list}
+    <b>{row['stop_name']}</b><br>
+    <b>Address:</b> {row['address']}, {row['city']}, {row['state_province']} {row['postal_code']}<br>
+    <b>Diesel Price:</b> {row['fuel_diesel_price']} {row['currency']}<br>
+    <b>Amenities:</b> {', '.join(row['amenities'].keys()) if row['amenities'] else 'No amenities listed'}
     """
-
     folium.Marker(
-        location=[row["latitude"], row["longitude"]],
-        popup=popup_content,
-        tooltip=stop_name,
-        icon=folium.Icon(color="blue", icon="info-sign"),
+        location=[row['latitude'], row['longitude']],
+        popup=folium.Popup(popup_content, max_width=300, parse_html=True),
+        tooltip=row['stop_name'],
+        icon=folium.Icon(color="blue", icon="info-sign")
     ).add_to(marker_cluster)
 
 # Display the map
-folium_static(m, width=900, height=600)
+folium_static(m)
