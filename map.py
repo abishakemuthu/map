@@ -43,23 +43,22 @@ df_filtered = filter_locations(df, selected_amenities)
 
 # Create map
 m = folium.Map(location=[df['latitude'].mean(), df['longitude'].mean()], zoom_start=6, control_scale=True)
-Fullscreen().add_to(m)
+Fullscreen(position="topright").add_to(m)  # Ensure full-screen functionality
 marker_cluster = MarkerCluster().add_to(m)
 
 # Add markers
 for _, row in df_filtered.iterrows():
     popup_content = f"""
-    <b>{row['stop_name']}</b><br>
-    <b>Address:</b> {row['address']}, {row['city']}, {row['state_province']} {row['postal_code']}<br>
-    <b>Diesel Price:</b> {row['fuel_diesel_price']} {row['currency']}<br>
-    <b>Amenities:</b> {', '.join(row['amenities'].keys()) if row['amenities'] else 'No amenities listed'}
+    Place Name: {row['stop_name']}<br>
+    Diesel Price: {row['fuel_diesel_price']} {row['currency']}<br>
+    Amenities: {', '.join(row['amenities'].keys()) if row['amenities'] else 'No amenities listed'}
     """
     folium.Marker(
         location=[row['latitude'], row['longitude']],
-        popup=folium.Popup(popup_content, max_width=300, parse_html=True),
+        popup=folium.Popup(popup_content, max_width=300, parse_html=False),
         tooltip=row['stop_name'],
         icon=folium.Icon(color="blue", icon="info-sign")
     ).add_to(marker_cluster)
 
 # Display the map
-folium_static(m)
+folium_static(m, width=1200, height=800)  # Increase map size for better usability
