@@ -56,4 +56,4 @@ for _, row in filtered_df.iterrows():
     ).add_to(marker_cluster)
 
 # Display the map
-folium_static(m)
+folium_static(m, width=900, height=600)
